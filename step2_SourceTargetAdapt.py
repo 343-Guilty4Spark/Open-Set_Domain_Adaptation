@@ -105,8 +105,8 @@ def _do_epoch(feature_extractor, obj_cls, self_cls, source_loader,target_loader_
     print(" OS*: %.4f, UNK: %.4f, HOS: %.4f" % (os_star, unk, hos))
     return os_star, unk, hos
    
-def step2(args,feature_extractor, obj_cls, self_cls, source_loader,target_loader_train,target_loader_eval, weight, n_epochs, device):
-    optimizer, scheduler = get_optim_and_scheduler(feature_extractor,obj_cls, self_cls, n_epochs, args.step2_learning_rate, args.weight_decay, args.train_all)
+def step2(args,feature_extractor, obj_cls, self_cls, source_loader,target_loader_train,target_loader_eval, weight, n_epochs, sched_mil, device):
+    optimizer, scheduler = get_optim_and_scheduler(feature_extractor,obj_cls, self_cls, n_epochs, sched_mil, args.step2_learning_rate, args.step2_weight_decay, args.train_all)
     
     hos_values = {}
     os_star = 0

@@ -35,21 +35,34 @@ def get_args():
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size")
     parser.add_argument("--step1_learning_rate", type=float, default=0.001, help="Step1 learning rate")
     parser.add_argument("--step2_learning_rate", type=float, default=0.001, help="Step2 learning rate")
-    parser.add_argument("--weight_decay", type=float, default=0.0005, help="Weight decay")
+    parser.add_argument("--step1_weight_decay", type=float, default=0.0005, help="Step1 weight decay")
+    parser.add_argument("--step2_weight_decay", type=float, default=0.0005, help="Step2 weight decay")
     parser.add_argument("--enable_scheduler", type=bool, default=True, help="If true, the system will apply a learning rate decay policy every n epochs")
     
     parser.add_argument("--epochs_rot_step1", type=int, default=10, help="Number of epochs of step1 for known/unknown separation in rotation training")
+    parser.add_argument("--mil_rot_step1", type=int, default=[5,8], help="Milestones for lr_decay for step1 rotation training")
     parser.add_argument("--epochs_rot_step2", type=int, default=10, help="Number of epochs of step2 for source-target adaptation in rotation training")
+    parser.add_argument("--mil_rot_step2", type=int, default=[5,8], help="Milestones for lr_decay for step2 rotation training")
     parser.add_argument("--epochs_rot_MH_step1", type=int, default=10, help="Number of epochs of step1 for known/unknown separation in rotation multi-head training")
+    parser.add_argument("--mil_rot_MH_step1", type=int, default=[5,8], help="Milestones for lr_decay for step1 rotation multi-head training")
     parser.add_argument("--epochs_rot_MH_step2", type=int, default=10, help="Number of epochs of step2 for source-target adaptation in rotation multi-head training")
+    parser.add_argument("--mil_rot_MH_step2", type=int, default=[5,8], help="Milestones for lr_decay for step2 rotation multi-head training")
     parser.add_argument("--epochs_flip_step1", type=int, default=10, help="Number of epochs of step1 for known/unknown separation in flip training")
+    parser.add_argument("--mil_flip_step1", type=int, default=[5,8], help="Milestones for lr_decay for step1 flip training")
     parser.add_argument("--epochs_flip_step2", type=int, default=10, help="Number of epochs of step2 for source-target adaptation in flip training")
+    parser.add_argument("--mil_flip_step2", type=int, default=[5,8], help="Milestones for lr_decay for step2 flip training")
     parser.add_argument("--epochs_flip_MH_step1", type=int, default=10, help="Number of epochs of step1 for known/unknown separation in flip multi-head training")
+    parser.add_argument("--mil_flip_MH_step1", type=int, default=[5,8], help="Milestones for lr_decay for step1 flip multi-head training")
     parser.add_argument("--epochs_flip_MH_step2", type=int, default=10, help="Number of epochs of step2 for source-target adaptation in flip multi-head training")
+    parser.add_argument("--mil_flip_MH_step2", type=int, default=[5,8], help="Milestones for lr_decay for step2 flip multi-head training")
     parser.add_argument("--epochs_jigsaw_step1", type=int, default=10, help="Number of epochs of step1 for known/unknown separation in jigsaw training")
+    parser.add_argument("--mil_jigsaw_step1", type=int, default=[5,8], help="Milestones for lr_decay for step1 jigsaw training")
     parser.add_argument("--epochs_jigsaw_step2", type=int, default=10, help="Number of epochs of step2 for source-target adaptation in jigsaw training")
+    parser.add_argument("--mil_jigsaw_step2", type=int, default=[5,8], help="Milestones for lr_decay for step2 jigsaw training")
     parser.add_argument("--epochs_jigsaw_MH_step1", type=int, default=10, help="Number of epochs of step1 for known/unknown separation in jigsaw multi-head training")
+    parser.add_argument("--mil_jigsaw_MH_step1", type=int, default=[5,8], help="Milestones for lr_decay for step1 jigsaw multi-head training")
     parser.add_argument("--epochs_jigsaw_MH_step2", type=int, default=10, help="Number of epochs of step2 for source-target adaptation in jigsaw multi-head training")
+    parser.add_argument("--mil_jigsaw_MH_step2", type=int, default=[5,8], help="Milestones for lr_decay for step2 jigsaw multi-head training")
 
     parser.add_argument("--train_all", type=bool, default=True, help="If true, all network weights will be trained")
 
@@ -77,7 +90,7 @@ def get_args():
     # model options
     parser.add_argument("--save_model", type=bool, default=False, help="If true, the current model will be saved between one training session and the next one")
     parser.add_argument("--self_sup_task", default="Rot", help="The type of self supervised task to apply: Rot, Flip, Jig, RotMH, FlipMH")
-    parser.add_argument("--train_dont_save", type=bool, default=False, help="If true, we retrain the model even if another model as already present. if save_model is true, the new model will overwrite the other one")
+    parser.add_argument("--train_dont_save", type=bool, default=True, help="If true, we retrain the model even if another model as already present. if save_model is true, the new model will overwrite the other one")
     
     return parser.parse_args()
 
@@ -113,12 +126,12 @@ class Trainer:
         )
 
         self.step1_epochs = dict(
-            rot_cls = args.epochs_rot_step1,
-            rot_MH_cls = args.epochs_rot_MH_step1,
-            flip_cls = args.epochs_flip_step1,
-            flip_MH_cls = args.epochs_flip_MH_step1,
-            jigsaw_cls = args.epochs_jigsaw_step1,
-            jigsaw_MH_cls = args.epochs_jigsaw_MH_step1
+            rot_cls = [args.epochs_rot_step1, args.mil_rot_step1],
+            rot_MH_cls = [args.epochs_rot_MH_step1, args.mil_rot_MH_step1],
+            flip_cls = [args.epochs_flip_step1, args.mil_flip_step1],
+            flip_MH_cls = [args.epochs_flip_MH_step1, args.mil_flip_MH_step1],
+            jigsaw_cls = [args.epochs_jigsaw_step1, args.mil_jigsaw_step1],
+            jigsaw_MH_cls = [args.epochs_jigsaw_MH_step1, args.mil_jigsaw_MH_step1]
         )
 
         self.step2_weights = dict(
@@ -131,12 +144,12 @@ class Trainer:
         )
 
         self.step2_epochs = dict(
-            rot_cls = args.epochs_rot_step2,
-            rot_MH_cls = args.epochs_rot_MH_step2,
-            flip_cls = args.epochs_flip_step2,
-            flip_MH_cls = args.epochs_flip_MH_step2,
-            jigsaw_cls = args.epochs_jigsaw_step2,
-            jigsaw_MH_cls = args.epochs_jigsaw_MH_step2
+            rot_cls = [args.epochs_rot_step2, args.mil_rot_step2],
+            rot_MH_cls = [args.epochs_rot_MH_step2, args.mil_rot_MH_step2],
+            flip_cls = [args.epochs_flip_step2, args.mil_flip_step2],
+            flip_MH_cls = [args.epochs_flip_MH_step2, args.mil_flip_MH_step2],
+            jigsaw_cls = [args.epochs_jigsaw_step2, args.mil_jigsaw_step2],
+            jigsaw_MH_cls = [args.epochs_jigsaw_MH_step2, args.mil_jigsaw_MH_step2]
         )
 
         self.source_path_file = 'txt_list/'+args.source+'_known.txt'
@@ -162,7 +175,7 @@ class Trainer:
     
         if (not os.path.isfile(f"./models/{self.args.source}/{self.args.self_sup_task}/feature_extractor_params.pt") and not os.path.isfile(f"./models/{self.args.source}/{self.args.self_sup_task}/obj_cls_params.pt")) or self.args.train_dont_save : # and not model_present:
             print('Step 1 --------------------------------------------')
-            fe_model, obj_model, self_model = step1(self.args, self.feature_extractor, self.obj_cls, self.current_sup_cls[0], self.current_sup_cls[1], self.source_loader, self.step1_weights[self_sup_cls], self.step1_epochs[self_sup_cls], self.device)
+            fe_model, obj_model, self_model = step1(self.args, self.feature_extractor, self.obj_cls, self.current_sup_cls[0], self.current_sup_cls[1], self.source_loader, self.step1_weights[self_sup_cls], self.step1_epochs[self_sup_cls][0], self.step1_epochs[self_sup_cls][1], self.device)
             if self.args.save_model:
                 torch.save(fe_model, f"./models/{self.args.source}/{self.args.self_sup_task}/feature_extractor_params.pt")
                 torch.save(obj_model, f"./models/{self.args.source}/{self.args.self_sup_task}/obj_cls_params.pt")
@@ -201,7 +214,7 @@ class Trainer:
         self.target_loader_eval = data_helper.get_val_dataloader(self.args,target_path_file, self.current_sup_cls[0])
 
         print('Step 2 --------------------------------------------')
-        step2(self.args, self.feature_extractor, self.obj_cls, self.current_sup_cls[1], self.source_loader, self.target_loader_train, self.target_loader_eval, self.step2_weights[self_sup_cls], self.step2_epochs[self_sup_cls], self.device)
+        step2(self.args, self.feature_extractor, self.obj_cls, self.current_sup_cls[1], self.source_loader, self.target_loader_train, self.target_loader_eval, self.step2_weights[self_sup_cls], self.step2_epochs[self_sup_cls][0], self.step2_epochs[self_sup_cls][1], self.device)
         
         
 def main():

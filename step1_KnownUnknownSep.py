@@ -61,8 +61,8 @@ def _do_epoch(args, feature_extractor, obj_cls, self_sup_type, self_cls, source_
 
     return img_loss, img_acc, self_loss, self_acc
 
-def step1(args, feature_extractor,obj_cls, self_sup_type, self_cls, source_loader, weight, n_epochs, device):
-    optimizer, scheduler = get_optim_and_scheduler(feature_extractor,obj_cls, self_cls, n_epochs, args.step1_learning_rate, args.weight_decay, args.train_all)
+def step1(args, feature_extractor,obj_cls, self_sup_type, self_cls, source_loader, weight, n_epochs, sched_mil, device):
+    optimizer, scheduler = get_optim_and_scheduler(feature_extractor,obj_cls, self_cls, n_epochs, sched_mil, args.step1_learning_rate, args.step1_weight_decay, args.train_all)
     criterion = nn.CrossEntropyLoss()
     self_accuracies = {}
     obj_accuracies = {}
