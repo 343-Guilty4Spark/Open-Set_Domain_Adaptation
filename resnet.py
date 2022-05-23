@@ -80,10 +80,8 @@ def resnet18_feat_extractor():
 
     return model
 
-# WARNING - CHECK AGAIN IF RESNET152 WORKS
-
-def resnet152_feat_extractor():
-    model = ResNet(BasicBlock, [2, 2, 2, 2])
-    model.load_state_dict(model_zoo.load_url(model_urls['resnet152']), strict=False)
+def resnet50_feat_extractor():
+    model = ResNet(Bottleneck, [3, 4, 6, 3])
+    model.load_state_dict(model_zoo.load_url(model_urls['resnet50']), strict=False)
 
     return model
