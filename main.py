@@ -33,7 +33,8 @@ def get_args():
     # training parameters
     parser.add_argument("--image_size", type=int, default=222, help="Image size (dimension should be compatible with jigsaw dimension)")
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size")
-    parser.add_argument("--learning_rate", type=float, default=0.001, help="Learning rate")
+    parser.add_argument("--step1_learning_rate", type=float, default=0.001, help="Step1 learning rate")
+    parser.add_argument("--step2_learning_rate", type=float, default=0.001, help="Step2 learning rate")
     parser.add_argument("--weight_decay", type=float, default=0.0005, help="Weight decay")
     parser.add_argument("--enable_scheduler", type=bool, default=True, help="If true, the system will apply a learning rate decay policy every n epochs")
     
@@ -199,9 +200,9 @@ class Trainer:
         self.target_loader_train = data_helper.get_train_dataloader(self.args,target_path_file, self.current_sup_cls[0])
         self.target_loader_eval = data_helper.get_val_dataloader(self.args,target_path_file, self.current_sup_cls[0])
 
-        print('Step 2 --------------------------------------------')    
+        print('Step 2 --------------------------------------------')
         step2(self.args, self.feature_extractor, self.obj_cls, self.current_sup_cls[1], self.source_loader, self.target_loader_train, self.target_loader_eval, self.step2_weights[self_sup_cls], self.step2_epochs[self_sup_cls], self.device)
-            
+        
         
 def main():
     args = get_args()
