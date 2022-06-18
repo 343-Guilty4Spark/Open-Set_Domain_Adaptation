@@ -1,34 +1,25 @@
-
 import torch
 from torchvision import transforms
 
 from dataset import Dataset, TestDataset, _dataset_info
 
 
-def get_train_dataloader(args,txt_file):
+def get_train_dataloader(args,txt_file, self_sup_cls):
 
     img_transformer = get_train_transformers(args)
     name_train, labels_train = _dataset_info(txt_file)
-    if args.ros_version == 'ROS' or args.ros_version == 'variation2':
-        train_dataset = Dataset(name_train, labels_train, args.path_dataset, img_transformer=img_transformer)
-    ##    
-    elif args.ros_version == 'variation1':
-        train_dataset = Dataset(name_train, labels_train, args.image_size, args.jigsaw_dimension, args.path_dataset, img_transformer=img_transformer)
-    loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, pin_memory=True, drop_last=True)
+    train_dataset = Dataset(args, name_train, labels_train, self_sup_cls, img_transformer=img_transformer)
+    loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
 
     return loader
 
 
-def get_val_dataloader(args,txt_file):
+def get_val_dataloader(args,txt_file, self_sup_cls):
 
     names, labels = _dataset_info(txt_file)
     img_tr = get_test_transformer(args)
-    if args.ros_version == 'ROS' or args.ros_version == 'variation2':
-        test_dataset = TestDataset(names, labels, args.path_dataset, img_transformer=img_tr)
-    ##
-    elif args.ros_version == 'variation1':
-        test_dataset = TestDataset(names, labels, args.image_size, args.jigsaw_dimension, args.path_dataset, img_transformer=img_tr)
-    loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True, drop_last=False)
+    test_dataset = TestDataset(args, names, labels, self_sup_cls, img_transformer=img_tr)
+    loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=4, pin_memory=True, drop_last=False)
 
     return loader
 
@@ -41,6 +32,8 @@ def get_train_transformers(args):
         img_tr.append(transforms.ColorJitter(brightness=args.jitter, contrast=args.jitter, saturation=args.jitter, hue=min(0.5, args.jitter)))
     if args.random_grayscale:
         img_tr.append(transforms.RandomGrayscale(args.random_grayscale))
+    if args.random_blur:
+        img_tr.append(transforms.GaussianBlur(kernel_size=args.kernel_blur_size, sigma=args.random_blur))
 
     img_tr = img_tr + [transforms.ToTensor(), transforms.Normalize([0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
 

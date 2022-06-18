@@ -1,126 +1,102 @@
-
 import torch
 from torch import nn
 from optimizer_helper import get_optim_and_scheduler
 from tqdm import tqdm
 
 #### Implement Step1
-def _do_epoch(args,feature_extractor,rot_cls,obj_cls, flip_cls, jigsaw_cls, source_loader,optimizer,device,criterion):
+
+# multi-head = 1 if there is only one head otherwise it will represent the number of clasess (and of heads, one per class)
+def _do_epoch(args, feature_extractor, obj_cls, self_sup_type, self_cls, source_loader, weight, optimizer,device,criterion):
     
     feature_extractor.train()
     obj_cls.train()
-    if args.ros_version == 'variation2':
-        for rot_cls_i in rot_cls:
-            rot_cls_i.train()
-    else:        
-        rot_cls.train()
-        flip_cls.train()
-        jigsaw_cls.train()
+    self_cls[0].train()
     
     running_img_corrects = 0
-    running_rot_corrects = 0
-    running_flip_corrects = 0
-    running_jigsaw_corrects = 0
+    running_self_corrects = 0
 
-    for i, (imgs, lbls, rot_imgs, rot_lbls, flip_img, flip_labl, jigsaw_img, jigsaw_labl) in tqdm(enumerate(source_loader)):
+    for _, (imgs, lbls, self_imgs, self_lbls) in tqdm(enumerate(source_loader)):
         imgs = imgs.to(device)
         lbls = lbls.to(device)
-        rot_imgs = rot_imgs.to(device)
-        rot_lbls = rot_lbls.to(device)
-        flip_img = flip_img.to(device)
-        flip_labl = flip_labl.to(device)
-        jigsaw_img = jigsaw_img.to(device)
-        jigsaw_labl = jigsaw_labl.to(device)
+        self_imgs = self_imgs.to(device)
+        self_lbls = self_lbls.to(device)
 
         # forward
         imgs_out = feature_extractor(imgs)
         imgs_predictions = obj_cls(imgs_out)
-
-        rot_out = feature_extractor(rot_imgs)
-        ##flip
-        flip_out = feature_extractor(flip_img)
-        jigsaw_out = feature_extractor(jigsaw_img)
-        if args.ros_version == 'variation2':
-            rot_loss = 0
-            # 对于每张图片，只训练该图片对应类别的旋转角度分类器
-            for index,class_l in enumerate(lbls.int()):
-                rot_predictions = torch.reshape(rot_cls[class_l](torch.cat((rot_out[index], imgs_out[index]), dim=0)),(1,4))
-                rot_loss += criterion(rot_predictions, torch.reshape(rot_lbls[index],(-1,)))
-                _, rot_preds = torch.max(rot_predictions, 1)
-                running_rot_corrects += torch.sum(rot_preds == rot_lbls[index])
-        else:
-            rot_predictions = rot_cls(torch.cat((rot_out, imgs_out), dim=1))
-            _, rot_preds = torch.max(rot_predictions, 1)
-            rot_loss = criterion(rot_predictions, rot_lbls)
-            running_rot_corrects += torch.sum(rot_preds == rot_lbls.data)
-            ##
-            flip_prediction = flip_cls(torch.cat((flip_out, imgs_out), dim=1))
-            _, flip_pred = torch.max(flip_prediction, 1)
-            jigsaw_prediction = jigsaw_cls(torch.cat((jigsaw_out, imgs_out), dim=1))
-            _, jigsaw_pred = torch.max(jigsaw_prediction, 1)
-
-        _, imgs_preds = torch.max(imgs_predictions, 1)        
-
-        '''
-        rot_predictions = rot_cls(torch.cat((rot_out, imgs_out), dim=1))
-
-        flip_out = feature_extractor(flip_img)
-        flip_prediction = flip_cls(torch.cat((flip_out, imgs_out), dim=1))
-
-        jigsaw_out = feature_extractor(jigsaw_img)
-        jigsaw_prediction = jigsaw_cls(torch.cat((jigsaw_out, imgs_out), dim=1))
-
-
-
-        _, imgs_preds = torch.max(imgs_predictions, 1)
-        _, rot_preds = torch.max(rot_predictions, 1)
-        _, flip_pred = torch.max(flip_prediction, 1)
-        _, jigsaw_pred = torch.max(jigsaw_prediction, 1)
-        '''
-        # compute loss
-
+        # loss
         img_loss = criterion(imgs_predictions, lbls)
-        rot_loss = criterion(rot_predictions, rot_lbls)
-        flip_loss = criterion(flip_prediction, flip_labl)
-        jigsaw_loss = criterion(jigsaw_prediction, jigsaw_labl)
+        _, imgs_preds = torch.max(imgs_predictions, 1)
+        #statistics
+        running_img_corrects += torch.sum(imgs_preds == lbls.data)
 
-        loss = img_loss + args.weight_RotTask_step1*rot_loss + args.weight_FlipTask_step1*flip_loss + args.weight_JigsawTask_step1*jigsaw_loss
+        # forward
+        # i pick just one image and its random rotated version and i try to predict the transformation
+        # try to implement multi-rotation classifier
+        self_out = feature_extractor(self_imgs)
+        
+        self_predictions = self_cls[0](torch.cat((self_out, imgs_out), dim=1))
+        # try to implement multi-rotation classifier
+        if self_sup_type == "rotation_mh":
+            self_lbls = (lbls * 4) + self_lbls
+        elif self_sup_type == "flip_mh":
+            self_lbls = (lbls * 2) + self_lbls
+        elif self_sup_type == "jigsaw_mh":
+            self_lbls = (lbls * args.jigsaw_permutations) + self_lbls
+            
+        self_loss = criterion(self_predictions, self_lbls)
+        _, self_preds = torch.max(self_predictions, 1)
+        running_self_corrects += torch.sum(self_preds == self_lbls.data)
+
+        # loss
+        loss = img_loss + weight*self_loss
 
         # compute gradient + update params
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        #statistics
-        running_img_corrects += torch.sum(imgs_preds == lbls.data)
-        running_rot_corrects += torch.sum(rot_preds == rot_lbls.data)
-        running_flip_corrects += torch.sum(flip_pred == flip_labl.data)
-        running_jigsaw_corrects += torch.sum(jigsaw_pred == jigsaw_labl.data)
-
     img_acc = (running_img_corrects.double() / len(source_loader.dataset)) * 100
-    rot_acc = (running_rot_corrects.double() / len(source_loader.dataset)) * 100
-    flip_acc = (running_flip_corrects.double() / len(source_loader.dataset)) * 100
-    jigsaw_acc = (running_jigsaw_corrects.double() / len(source_loader.dataset)) * 100
+    self_acc = (running_self_corrects.double() / len(source_loader.dataset)) * 100
 
-    return img_loss, img_acc, rot_loss, rot_acc, flip_loss, flip_acc, jigsaw_loss, jigsaw_acc
+    return img_loss, img_acc, self_loss, self_acc
 
-def step1(args,feature_extractor,rot_cls,obj_cls, flip_cls, jigsaw_cls, source_loader,device):
-    optimizer, scheduler = get_optim_and_scheduler(feature_extractor,obj_cls, rot_cls, flip_cls, jigsaw_cls, args.epochs_step1, args.learning_rate, args.train_all)
+def step1(args, feature_extractor,obj_cls, self_sup_type, self_cls, source_loader, weight, n_epochs, device):
+    optimizer, scheduler = get_optim_and_scheduler(feature_extractor,obj_cls, self_cls, n_epochs, args.learning_rate, args.weight_decay, args.train_all)
     criterion = nn.CrossEntropyLoss()
+    self_accuracies = {}
+    obj_accuracies = {}
 
-    for epoch in range(args.epochs_step1):
+    for epoch in range(n_epochs):
         print('Epoch: ',epoch)
-        class_loss, acc_cls, rot_loss, acc_rot, flip_loss, flip_acc, jigsaw_loss, jigsaw_acc = _do_epoch(args,feature_extractor,rot_cls,obj_cls, flip_cls, jigsaw_cls, source_loader,optimizer,device,criterion)
-        print("Class Loss %.4f, Class Accuracy %.4f,Rot Loss %.4f, Rot Accuracy %.4f, Flip Loss %.4f, Flip Accuracy %.4f, Jigsaw Loss %.4f, Jigsaw Accuracy %.4f" % (class_loss.item(),acc_cls,rot_loss.item(), acc_rot, flip_loss.item(), flip_acc, jigsaw_loss.item(), jigsaw_acc))
-        scheduler.step()
-    
-    torch.save(feature_extractor.state_dict(), "./feature_extractor_params.pt")
-    torch.save(obj_cls.state_dict(), "./obj_cls_params.pt")
+        obj_loss, obj_acc, self_loss, self_acc = _do_epoch(args, feature_extractor, obj_cls, self_sup_type, self_cls, source_loader, weight, optimizer,device,criterion)
+        
+        self_accuracies[epoch] = self_acc
+        obj_accuracies[epoch] = obj_acc
+        
+        print("Obj-Class Loss %.4f, Obj-Class Accuracy %.4f, Self_sup Loss %.4f, Self_sup Accuracy %.4f" % (obj_loss.item(), obj_acc, self_loss.item(), self_acc))
+        if args.enable_scheduler:    
+            scheduler.step()
 
-    if args.ros_version == 'variation2':
-        for i in range(args.n_classes_known):
-            torch.save(rot_cls[i].state_dict(), "./models/rot_cls_params_{}.pt".format(i))
-    else:
-        torch.save(rot_cls.state_dict(), "./models/rot_cls_params.pt")
-        torch.save(flip_cls.state_dict(), "./flip_cls_params.pt")
-        torch.save(jigsaw_cls.state_dict(), "./jigsaw_cls_params.pt")
+    # write all statistics on file. We will plot them later
+
+    self_accuracies_list = [(k, v) for k, v in self_accuracies.items()]
+    obj_accuracies_list = [(k, v) for k, v in obj_accuracies.items()]
+    
+    self_stats = open("./stats/self_stats.txt", "a")
+    obj_stats = open("./stats/obj_stats.txt", "a")
+    statistics = ""
+    for self_acc in self_accuracies_list: # 1:0.05 , 2:0.15... epoch:accuracy
+        statistics += str(self_acc[0]) + ":" + str(self_acc[1].item()) + ","
+    statistics += str(weight) + "\n"
+    self_stats.write(statistics)
+    self_stats.close()
+
+    statistics = ""
+    for obj_acc in obj_accuracies_list: # 1:0.05 , 2:0.15... epoch:accuracy
+        statistics += str(obj_acc[0]) + ":" + str(obj_acc[1].item()) + ","
+    statistics += str(weight) + "\n"
+    obj_stats.write(statistics)
+    obj_stats.close()
+    
+    return feature_extractor.state_dict(), obj_cls.state_dict(), self_cls[0].state_dict()
